@@ -2,8 +2,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from shiny import ui, render, App, reactive
 import random
-import matplotlib.pyplot as plt
-import numpy as np
 from random import shuffle
 
 class Patient:
@@ -49,9 +47,6 @@ def calculate_median_wait_time(patients):
 
 def calculate_mean_wait_time(patients):
     return np.mean([patient.wait_time for patient in patients])
-
-def calculate_percentiles(data, percentile):
-    return np.percentile(data, percentile)
 
 app_ui = ui.page_fluid(
     ui.h1("Patient Waiting Time Simulator"),
