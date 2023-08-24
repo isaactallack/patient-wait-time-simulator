@@ -4,6 +4,8 @@ from shiny import ui, render, App, reactive
 import random
 from random import shuffle
 
+std_dev_value = 5
+
 class Patient:
     def __init__(self, x1, x2, x3, x4, x5):
         self.wait_time = 0
@@ -30,6 +32,20 @@ class Patient:
     def increase_urgency(self, func, severity_increase):
         self.urgency = func(self.urgency, self.wait_time, severity_increase)
         self.wait_time += 1
+
+def generate_integer_from_normal(mean, std_dev):
+    """
+    Generate a random integer from a normal distribution centered around a given mean.
+    
+    Args:
+    - mean (float): The mean of the normal distribution.
+    - std_dev (float): The standard deviation of the normal distribution.
+    
+    Returns:
+    - int: A random integer.
+    """
+    random_value = np.random.normal(mean, std_dev)
+    return int(round(random_value))
 
 def urgency_increase_function(urgency, wait_time, severity_increase):
     return min(1, urgency + severity_increase)
@@ -93,6 +109,9 @@ def server(input, output, session):
         percentile_10_untreated = []
 
         for step in range(input.time_steps()):
+            new_patients = generate_integer_from_normal(input.new_patients(), std_dev_value)
+            removed_patients = generate_integer_from_normal(input.removed_patients(), std_dev_value)
+
             for patient in patients:
                 patient.increase_urgency(urgency_increase_function, input.severity_increase())
 
@@ -100,11 +119,11 @@ def server(input, output, session):
             patients.sort(key=lambda p: -p.urgency)
 
             if step >= input.time_steps() - 10:
-                            last_10_steps_removed.extend(patients[:input.removed_patients()])
+                            last_10_steps_removed.extend(patients[:removed_patients])
 
-            add_new_patients(patients, input.new_patients(), input.x1(), input.x2(), input.x3(), input.x4(), input.x5())
+            add_new_patients(patients, new_patients, input.x1(), input.x2(), input.x3(), input.x4(), input.x5())
 
-            patients = remove_treated_patients(patients, input.removed_patients(), treated_patients)
+            patients = remove_treated_patients(patients, removed_patients, treated_patients)
 
             median_wait_time_treated.append(calculate_median_wait_time(treated_patients))
             median_wait_time_untreated.append(calculate_median_wait_time(patients))
