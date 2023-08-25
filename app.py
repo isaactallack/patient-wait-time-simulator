@@ -147,12 +147,26 @@ def server(input, output, session):
 
         # Wait time distribution plot for untreated patients
         all_wait_times = [patient.wait_time for patient in patients]
-        if all_wait_times: # Check if the list is not empty
-            axs[1, 0].hist(all_wait_times, bins=range(max(all_wait_times)+1), edgecolor='black')
+        urgent_wait_times = [patient.wait_time for patient in patients if patient.urgency == 1]
+        if all_wait_times:  # Check if the list is not empty
+            # Compute the histogram for all wait times
+            all_hist_values, bins = np.histogram(all_wait_times, bins=range(max(all_wait_times) + 2))
+            # Compute the histogram for urgent wait times
+            urgent_hist_values, _ = np.histogram(urgent_wait_times, bins=range(max(all_wait_times) + 2))
+
+            # Width for each bar
+            width = 0.8  # you can adjust this value if needed
+            
+            # Plot histogram for all patients
+            axs[1, 0].bar(bins[:-1], all_hist_values, width=width, color='blue', label='All patients', edgecolor='black')
+            # Plot histogram for patients with urgency=1 on top of the previous bars
+            axs[1, 0].bar(bins[:-1], urgent_hist_values, width=width, color='red', label='Urgency=1', edgecolor='black')
+
             axs[1, 0].set_xlabel('Wait Time (Time Steps)')
             axs[1, 0].set_ylabel('Frequency')
             axs[1, 0].set_title('Distribution of Wait Times for Untreated')
             axs[1, 0].grid(True)
+            axs[1, 0].legend()  # to show the legend
 
         # Wait time distribution plot for patients removed at last time step
         last_step_removed_wait_times = [patient.wait_time for patient in last_10_steps_removed]
