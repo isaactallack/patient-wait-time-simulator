@@ -147,20 +147,44 @@ def server(input, output, session):
 
         # Wait time distribution plot for untreated patients
         all_wait_times = [patient.wait_time for patient in patients]
-        urgent_wait_times = [patient.wait_time for patient in patients if patient.urgency == 1]
-        if all_wait_times:  # Check if the list is not empty
+
+        # Extract all urgencies
+        all_urgencies = [round(patient.urgency, 3) for patient in patients]
+
+        # Convert to a set to remove duplicates and then back to a list
+        all_urgencies = list(set(all_urgencies))
+
+        # Sort in descending order and take the top 5
+        unique_urgencies = sorted(all_urgencies, reverse=True)[:5]
+
+        # Colors to represent the urgencies
+        colors = ['red', 'orange', 'yellow', 'green', 'blue']
+
+        if all_wait_times:
             # Compute the histogram for all wait times
             all_hist_values, bins = np.histogram(all_wait_times, bins=range(max(all_wait_times) + 2))
-            # Compute the histogram for urgent wait times
-            urgent_hist_values, _ = np.histogram(urgent_wait_times, bins=range(max(all_wait_times) + 2))
-
+            
             # Width for each bar
             width = 0.8  # you can adjust this value if needed
-            
-            # Plot histogram for all patients
-            axs[1, 0].bar(bins[:-1], all_hist_values, width=width, color='blue', label='All patients', edgecolor='black')
-            # Plot histogram for patients with urgency=1 on top of the previous bars
-            axs[1, 0].bar(bins[:-1], urgent_hist_values, width=width, color='red', label='Urgency=1', edgecolor='black')
+
+            # Plot histogram for all patients first, so it's at the background
+            axs[1, 0].bar(bins[:-1], all_hist_values, width=width, color='grey', label='All patients', edgecolor='black')
+
+            # This will keep track of the base for each bar, initialized to zeros
+            cumulative_hist = np.zeros_like(all_hist_values)
+
+            # Plot histograms for top urgencies
+            for i, urgency in enumerate(unique_urgencies):
+                # Get wait times for patients with the specific urgency
+                urgent_wait_times = [patient.wait_time for patient in patients if round(patient.urgency, 3) == urgency]
+                # Compute the histogram for these wait times
+                urgent_hist_values, _ = np.histogram(urgent_wait_times, bins=range(max(all_wait_times) + 2))
+                
+                # Plot histogram with the base set as the cumulative histogram
+                axs[1, 0].bar(bins[:-1], urgent_hist_values, width=width, color=colors[i], label=f'Urgency={urgency:.3f}', edgecolor='black', bottom=cumulative_hist)
+                
+                # Update the cumulative histogram for the next urgency level
+                cumulative_hist += urgent_hist_values
 
             axs[1, 0].set_xlabel('Wait Time (Time Steps)')
             axs[1, 0].set_ylabel('Frequency')
