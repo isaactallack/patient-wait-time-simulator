@@ -4,6 +4,21 @@ from shiny import ui, render, App, reactive
 import random
 from random import shuffle
 
+current_state = {
+    "step": 0,
+    "patients": [],
+    "treated_patients": [],
+    "last_10_steps_removed": [],
+    "median_wait_time_treated": [],
+    "median_wait_time_untreated": [],
+    "mean_wait_time_treated": [],
+    "mean_wait_time_untreated": [],
+    "percentile_90_treated": [],
+    "percentile_10_treated": [],
+    "percentile_90_untreated": [],
+    "percentile_10_untreated": []
+}
+
 class Patient:
     def __init__(self, x1, x2, x3, x4, x5):
         self.wait_time = 0
@@ -32,14 +47,14 @@ class Patient:
         self.wait_time += 1
 
 def urgency_increase_function(urgency, wait_time, severity_increase):
-    return min(1, urgency + severity_increase)
+    return urgency + severity_increase
 
 def add_new_patients(patients, n, x1, x2, x3, x4, x5):
     for _ in range(n):
         patients.append(Patient(x1, x2, x3, x4, x5))
 
 def remove_treated_patients(patients, n, treated_patients):
-    treated_patients.extend(patients[:n])
+    current_state["treated_patients"].extend(patients[:n])
     return patients[n:]
 
 def calculate_median_wait_time(patients):
@@ -52,22 +67,23 @@ app_ui = ui.page_fluid(
     ui.h1("Patient Waiting Time Simulator"),
     ui.layout_sidebar(
         ui.panel_sidebar(
-             ui.input_action_button("run", "Run simulation"),
+            ui.input_action_button("run", "Run simulation"),
+            ui.input_action_button("next_step", "Step through"),
             ui.input_slider("initial_patients", "Initial Patients", 0, 2000, 1000),
             ui.input_slider("new_patients", "New Patients", 0, 100, 50),
             ui.input_slider("removed_patients", "Removed Patients", 0, 100, 50),
             ui.input_slider("time_steps", "Time Steps", 10, 500, 52),
-            ui.input_slider("severity_increase", "Severity increase per time step", 0, 0.1, 0.01),
+            ui.input_slider("severity_increase", "Severity increase per time step", 0, 0.1, 0.1),
             ui.markdown("""
                         Adjust random severity weighting.\n
                         Weightings are normalised so while the values don't
                         NEED to sum to 1, it's most intuitive to make them sum to 1.
                     """),
-            ui.input_numeric("x1", "Proportion of patients with 0.1 urgency", value=0.2),
-            ui.input_numeric("x2", "Proportion of patients with 0.3 urgency", value=0.2),
-            ui.input_numeric("x3", "Proportion of patients with 0.5 urgency", value=0.2),
-            ui.input_numeric("x4", "Proportion of patients with 0.7 urgency", value=0.2),
-            ui.input_numeric("x5", "Proportion of patients with 0.9 urgency", value=0.2)
+            ui.input_numeric("x1", "Severity = 1 weighting", value=0.2),
+            ui.input_numeric("x2", "Severity = 2 weighting", value=0.2),
+            ui.input_numeric("x3", "Severity = 3 weighting", value=0.2),
+            ui.input_numeric("x4", "Severity = 4 weighting", value=0.2),
+            ui.input_numeric("x5", "Severity = 5 weighting", value=0.2)
         ),
         ui.panel_main(
             ui.output_plot("plot", width="100%" ,height="1500px")
@@ -76,54 +92,104 @@ app_ui = ui.page_fluid(
 )
 
 def server(input, output, session):
-    @reactive.Calc
-    def calculate():
-        random.seed(1)
-        patients = [Patient(input.x1(), input.x2(), input.x3(), input.x4(), input.x5()) for _ in range(input.initial_patients())]
-        treated_patients = []
-        last_10_steps_removed = []
+    def simulate_one_step():
+        global current_state
 
-        median_wait_time_treated = []
-        median_wait_time_untreated = []
-        mean_wait_time_treated = []
-        mean_wait_time_untreated = []
-        percentile_90_treated = []
-        percentile_10_treated = []
-        percentile_90_untreated = []
-        percentile_10_untreated = []
+        step = current_state["step"]
+        patients = current_state["patients"]
+        treated_patients = current_state["treated_patients"]
+        last_10_steps_removed = current_state["last_10_steps_removed"]
+        median_wait_time_treated = current_state["median_wait_time_treated"]
+        median_wait_time_untreated = current_state["median_wait_time_untreated"]
+        mean_wait_time_treated = current_state["mean_wait_time_treated"]
+        mean_wait_time_untreated = current_state["mean_wait_time_untreated"]
+        percentile_90_treated = current_state["percentile_90_treated"]
+        percentile_10_treated = current_state["percentile_10_treated"]
+        percentile_90_untreated = current_state["percentile_90_untreated"]
+        percentile_10_untreated = current_state["percentile_10_untreated"]
 
-        for step in range(input.time_steps()):
-            for patient in patients:
-                patient.increase_urgency(urgency_increase_function, input.severity_increase())
+        for patient in patients:
+            patient.increase_urgency(urgency_increase_function, input.severity_increase())
 
-            shuffle(patients)
-            patients.sort(key=lambda p: -p.urgency)
+        shuffle(patients)
+        patients.sort(key=lambda p: -p.urgency)
 
-            if step >= input.time_steps() - 10:
-                            last_10_steps_removed.extend(patients[:input.removed_patients()])
+        if step >= input.time_steps() - 10:
+                last_10_steps_removed.extend(patients[:input.removed_patients()])
 
-            add_new_patients(patients, input.new_patients(), input.x1(), input.x2(), input.x3(), input.x4(), input.x5())
+        add_new_patients(patients, input.new_patients(), input.x1(), input.x2(), input.x3(), input.x4(), input.x5())
 
-            patients = remove_treated_patients(patients, input.removed_patients(), treated_patients)
+        patients = remove_treated_patients(patients, input.removed_patients(), treated_patients)
 
-            median_wait_time_treated.append(calculate_median_wait_time(treated_patients))
-            median_wait_time_untreated.append(calculate_median_wait_time(patients))
-            mean_wait_time_treated.append(calculate_mean_wait_time(treated_patients))
-            mean_wait_time_untreated.append(calculate_mean_wait_time(patients))
-            percentile_90_treated.append(np.percentile([patient.wait_time for patient in treated_patients], 90) if treated_patients else np.nan)
-            percentile_10_treated.append(np.percentile([patient.wait_time for patient in treated_patients], 10) if treated_patients else np.nan)
-            percentile_90_untreated.append(np.percentile([patient.wait_time for patient in patients], 90) if patients else np.nan)
-            percentile_10_untreated.append(np.percentile([patient.wait_time for patient in patients], 10) if patients else np.nan)
+        median_wait_time_treated.append(calculate_median_wait_time(treated_patients))
+        median_wait_time_untreated.append(calculate_median_wait_time(patients))
+        mean_wait_time_treated.append(calculate_mean_wait_time(treated_patients))
+        mean_wait_time_untreated.append(calculate_mean_wait_time(patients))
+        percentile_90_treated.append(np.percentile([patient.wait_time for patient in treated_patients], 90) if treated_patients else np.nan)
+        percentile_10_treated.append(np.percentile([patient.wait_time for patient in treated_patients], 10) if treated_patients else np.nan)
+        percentile_90_untreated.append(np.percentile([patient.wait_time for patient in patients], 90) if patients else np.nan)
+        percentile_10_untreated.append(np.percentile([patient.wait_time for patient in patients], 10) if patients else np.nan)
 
-        return (median_wait_time_treated, median_wait_time_untreated, mean_wait_time_treated, mean_wait_time_untreated, percentile_90_treated, percentile_10_treated, percentile_90_untreated, percentile_10_untreated, treated_patients, patients, last_10_steps_removed)
+        current_state["step"] += 1
+        current_state["patients"] = patients
+        current_state["treated_patients"] = treated_patients
+        current_state["last_10_steps_removed"] = last_10_steps_removed
+        current_state["median_wait_time_treated"] = median_wait_time_treated
+        current_state["median_wait_time_untreated"] = median_wait_time_untreated
+        current_state["mean_wait_time_treated"] = mean_wait_time_treated
+        current_state["mean_wait_time_untreated"] = mean_wait_time_untreated
+        current_state["percentile_90_treated"] = percentile_90_treated
+        current_state["percentile_10_treated"] = percentile_10_treated
+        current_state["percentile_90_untreated"] = percentile_90_untreated
+        current_state["percentile_10_untreated"] = percentile_10_untreated
 
+    @reactive.Effect
+    @reactive.event(input.next_step)
+    def handle_next_step():
+        print("Starting single step...")
+        simulate_one_step()
+        print("Finished single step.")
 
-    @output
-    @render.plot
+    @reactive.Effect
     @reactive.event(input.run, ignore_none=False)
-    def plot():
-        calculations = calculate()
-        median_wait_time_treated, median_wait_time_untreated, mean_wait_time_treated, mean_wait_time_untreated, percentile_90_treated, percentile_10_treated, percentile_90_untreated, percentile_10_untreated, treated_patients, patients, last_10_steps_removed = calculations
+    def handle_run_event():
+        print("Starting full run...")
+        global current_state
+
+        # Reset the state
+        current_state["step"] = 0
+        current_state["patients"] = [Patient(input.x1(), input.x2(), input.x3(), input.x4(), input.x5()) for _ in range(input.initial_patients())]
+        current_state["treated_patients"] = [] 
+        current_state["last_10_steps_removed"] = []
+        current_state["median_wait_time_treated"] = []
+        current_state["median_wait_time_untreated"] = []
+        current_state["mean_wait_time_treated"] = []
+        current_state["mean_wait_time_untreated"] = []
+        current_state["percentile_90_treated"] = []
+        current_state["percentile_10_treated"] = []
+        current_state["percentile_90_untreated"] = []
+        current_state["percentile_10_untreated"] = []
+
+        # Run the simulation for the number of time steps
+        for _ in range(input.time_steps()):
+            simulate_one_step()
+
+        print("Finished full run.")
+        render.plot()
+
+    def plot_graphs():
+        step = current_state["step"]
+        patients = current_state["patients"]
+        treated_patients = current_state["treated_patients"]
+        last_10_steps_removed = current_state["last_10_steps_removed"]
+        median_wait_time_treated = current_state["median_wait_time_treated"]
+        median_wait_time_untreated = current_state["median_wait_time_untreated"]
+        mean_wait_time_treated = current_state["mean_wait_time_treated"]
+        mean_wait_time_untreated = current_state["mean_wait_time_untreated"]
+        percentile_90_treated = current_state["percentile_90_treated"]
+        percentile_10_treated = current_state["percentile_10_treated"]
+        percentile_90_untreated = current_state["percentile_90_untreated"]
+        percentile_10_untreated = current_state["percentile_10_untreated"]
 
         fig, axs = plt.subplots(3, 2, figsize=(12, 12))
 
@@ -218,5 +284,15 @@ def server(input, output, session):
         axs[2, 0].grid(True)
 
         return fig
+
+    @output
+    @render.plot
+    def plot():
+        input.run()
+        input.next_step()
+        print("Plotting")
+        print("Finished plot.")
+        return plot_graphs()
+        
 
 app = App(app_ui, server)
