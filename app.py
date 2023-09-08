@@ -68,12 +68,13 @@ app_ui = ui.page_fluid(
     ui.layout_sidebar(
         ui.panel_sidebar(
             ui.input_action_button("run", "Run simulation"),
+            ui.output_text("txt"),
             ui.input_action_button("next_step", "Step through"),
             ui.input_slider("initial_patients", "Initial Patients", 0, 2000, 1000),
             ui.input_slider("new_patients", "New Patients", 0, 100, 50),
             ui.input_slider("removed_patients", "Removed Patients", 0, 100, 50),
             ui.input_slider("time_steps", "Time Steps", 10, 500, 52),
-            ui.input_slider("severity_increase", "Severity increase per time step", 0, 0.1, 0.1),
+            ui.input_slider("severity_increase", "Severity increase per time step", 0, 0.1, 0.03),
             ui.markdown("""
                         Adjust random severity weighting.\n
                         Weightings are normalised so while the values don't
@@ -83,7 +84,7 @@ app_ui = ui.page_fluid(
             ui.input_numeric("x2", "Severity = 2 weighting", value=0.2),
             ui.input_numeric("x3", "Severity = 3 weighting", value=0.2),
             ui.input_numeric("x4", "Severity = 4 weighting", value=0.2),
-            ui.input_numeric("x5", "Severity = 5 weighting", value=0.2)
+            ui.input_numeric("x5", "Severity = 5 weighting", value=0.2),
         ),
         ui.panel_main(
             ui.output_plot("plot", width="100%" ,height="1500px")
@@ -175,7 +176,6 @@ def server(input, output, session):
             simulate_one_step()
 
         print("Finished full run.")
-        render.plot()
 
     def plot_graphs():
         step = current_state["step"]
@@ -287,12 +287,18 @@ def server(input, output, session):
 
     @output
     @render.plot
+    @reactive.event(input.run, input.next_step, ignore_none=False)
     def plot():
-        input.run()
-        input.next_step()
         print("Plotting")
         print("Finished plot.")
         return plot_graphs()
+    
+    @output
+    @render.text
+    @reactive.event(input.run, input.next_step, ignore_none=False)
+    def txt():
+        current_time_step = current_state["step"]
+        return f"Current time step: {current_time_step}"
         
 
 app = App(app_ui, server)
